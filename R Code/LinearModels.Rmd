@@ -1,0 +1,249 @@
+---
+title: "LinearModels"
+author: "Nikola_Stankovic"
+---
+
+###Import prepared data set from the Data Analysis step
+```{r}
+load("C:/CKME136/Forest Fires/fdata.RDa")
+fdata <- fdatatemp
+```
+
+Package to perform stepwise linear regression:
+```{r}
+install.packages("MASS",repos = "http://cran.rstudio.com/")
+library(MASS)
+```
+
+Package used to perform cross-validation calls to 'cross-validation-lm.R' script
+```{r}
+install.packages("cvTools",repos = "http://cran.rstudio.com/")
+library(cvTools)
+```
+
+Exclude original spatial and 
+temporal predictors and keep the transformed ones: season, wday and XY (simplified coordinates)
+```{r}
+fdata <- fdata[,c(5:17)]
+```
+
+
+###1.Apply linear model to using weather and fire index numeric predictors
+```{r}
+lm.wf <- lm(formula = arealog ~ FFMC + DMC + DC + ISI + temp + RH + rain + wind,data= fdata)
+summary(lm.wf)
+```
+The model has very low R-squared and adjusted R-squared
+Multiple R-squared:  0.01988
+Adjusted R-squared:  0.004446 
+
+Test the model using 10-fold cross-validation repeated 30 times:
+```{r}
+sel_var_lm <- "FFMC + DMC + DC + ISI + temp + RH + rain + wind" 
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lm.R', echo = TRUE)
+```
+##### > RMSE
+##### [1] 64.44124
+##### > MAD
+##### [1] 12.93817
+
+###1a.Stepwise selection for weather and fire numeric variables
+```{r  results="hide"}
+stepB <- stepAIC(lm.wf, scope=list(upper=~.,lower=NULL, direction= "backward", trace=TRUE))
+```
+
+```{r}
+summary(stepB)
+```
+The suggested best model includes FFMC, RH, wind
+
+Multiple R-squared:  0.01425
+Adjusted R-squared:  0.008485
+
+Test the model:
+```{r}
+sel_var_lm <- "DMC + RH + wind" 
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lm.R', echo = TRUE)
+```
+##### > RMSE
+##### [1] 64.44783
+##### > MAD
+##### [1] 12.95806
+
+###2.Linear model all the predictors (spatial and temporal are categorized in less number of classes)
+```{r}
+lm.all <- lm(formula = arealog ~ .-area, data= fdata)
+summary(lm.all)
+```
+Multiple R-squared:  0.05259
+Adjusted R-squared:  0.01835 
+
+Test the model
+```{r}
+sel_var_lm <- ".-area" 
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lm.R', echo = TRUE)
+```
+##### > RMSE
+##### [1] 64.33444
+##### > MAD
+##### [1] 12.85998
+
+###2a. Apply stepwise for on the previous model
+```{r results="hide"}
+stepC <- stepAIC(lm.all, scope=list(upper=~.,lower=NULL, direction= "backward", trace=TRUE))
+```
+```{r}
+summary(stepC)
+```
+Suggested predictors: DMC + wind + temp + season
+
+Multiple R-squared:  0.0377
+Adjusted R-squared:  0.02638 
+
+Test the model:
+```{r}
+sel_var_lm <- "DMC + temp + wind + season" 
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lm.R', echo = TRUE)
+```
+#####> RMSE
+#####[1] 64.39118
+#####> MAD
+#####[1] 12.89213
+
+###3. Polynomial regression
+Test if quadratic model is better than regular linear for each predictor separately
+```{r}
+for (i in 1:4) {
+  lm.ffmc <- lm(formula = arealog ~  poly(fdata$FFMC, i),data= fdata)
+  print(summary(lm.ffmc))
+}
+for (i in 1:4) {
+  
+  lm.dmc <- lm(formula = arealog ~  poly(fdata$DMC, i),data= fdata)
+  print(summary(lm.dmc))
+}
+
+for (i in 1:4) {
+  lm.isi <- lm(formula = arealog ~  poly(fdata$ISI, i),data= fdata)
+  print(summary(lm.isi))
+}
+for (i in 1:4) {
+  lm.dc <- lm(formula = arealog ~  poly(fdata$DC, i),data= fdata)
+  print(summary(lm.dc))
+}
+for (i in 1:4) {
+  lm.temp <- lm(formula = arealog ~  poly(fdata$temp, i),data= fdata)
+  print(summary(lm.temp))
+}
+
+for (i in 1:4) {
+  lm.rh <- lm(formula = arealog ~  poly(fdata$RH, i),data= fdata)
+  print(summary(lm.rh))
+}
+
+for (i in 1:4) {
+  lm.wind <- lm(formula = arealog ~  poly(fdata$wind, i),data= fdata)
+  print(summary(lm.wind))
+}
+
+for (i in 1:4) {
+  lm.rain <- lm(formula = arealog ~  poly(fdata$rain, i),data= fdata)
+  print(summary(lm.rain))
+}
+```
+
+3 out of 4 weather predictors (wind, temperature and rain) showed better results(smaller p-value) when polynomials applied
+I will take the best model so far (stepC) and add quadratic terms wind, temp and also rain
+```{r}
+lm.poly <- lm(formula = arealog ~  DMC + poly(temp,3) + poly(wind,3) + poly(rain,3) + 
+                season, data = fdata)
+summary(lm.poly)
+```
+Multiple R-squared:  0.06256
+Adjusted R-squared:  0.03834 
+
+Test the model:
+```{r}
+sel_var_lm <- "DMC + poly(temp,3) + poly(wind,3) + poly(rain,3) + 
+                season" 
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lm.R', echo = TRUE)
+```
+#####> RMSE
+#####[1] 64.34547
+#####> MAD
+#####[1] 12.78232
+
+### 3a Add quadratic term for DC
+```{r}
+lm.polyDC <- lm(formula = arealog ~  DMC + poly(temp,3) + poly(wind,3) + poly(rain,3) + poly(DC,2)  +
+                season, data = fdata)
+summary(lm.polyDC)
+```
+
+Multiple R-squared:  0.06999	
+Adjusted R-squared:  0.04215 
+
+Test the model:
+```{r}
+sel_var_lm <- "DMC + poly(temp,3) + poly(wind,3) + poly(rain,3) + poly(DC,2)  +
+                season" 
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lm.R', echo = TRUE, max.deparse.length=1e3)
+```
+#####> RMSE
+#####[1] 64.30157
+#####> MAD
+#####[1] 12.75959
+
+### 4. Use the model created in step 2a and add interactions to it
+```{r results="hide"}
+lm.ie <- lm(formula = arealog ~ (DMC + wind + temp + season)^2, data= fdata)
+stepD <- stepAIC(lm.ie, scope=list(upper=~.,lower=NULL, direction= "backward", trace=TRUE))
+```
+```{r}
+summary(stepD)
+```
+Multiple R-squared:  0.05421
+Adjusted R-squared:  0.03552
+
+
+Test the model
+```{r}
+sel_var_lm <- "DMC + wind + temp + season + DMC:temp + DMC:season"
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lm.R', echo = TRUE)
+```
+#####> RMSE
+#####[1] 64.35089
+#####> MAD
+#####[1] 12.79311
+
+
+### 4a Tests interactions for all predictors
+```{r}
+lm.ieall <- lm(formula = arealog ~ (.-area)^2, data= fdata)
+```
+
+```{r results="hide"}
+stepE <- stepAIC(lm.ieall, scope=list(upper=~.,lower=NULL, direction= "backward", trace=TRUE))
+```
+
+```{r}
+summary(stepE)
+```
+
+The best model has improved significantly: 
+Multiple R-squared:  0.1533
+Adjusted R-squared:  0.07242
+
+
+Test the model
+```{r}
+sel_var_lm <- "DMC + DC + ISI + temp + RH + wind + rain + 
+    season + XY + DMC:DC + DMC:RH + DMC:season + DC:XY + ISI:temp + 
+ISI:season + ISI:XY + temp:rain + temp:season + RH:season + 
+ISI:rain"
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lm.R', echo = TRUE)
+```
+#####> RMSE
+#####[1] 64.06452
+#####> MAD
+#####[1] 12.47535

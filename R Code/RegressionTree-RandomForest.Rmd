@@ -1,0 +1,162 @@
+---
+title: "RegressionTree-RandomForest"
+author: "Nikola_Stankovic"
+---
+
+## Regression Tree 
+
+Packages required to build and plot regression trees
+```{r results="hide"}
+install.packages("rpart",repos = "http://cran.rstudio.com/")
+library(rpart)
+install.packages("rpart.plot",repos = "http://cran.rstudio.com/")
+library(rpart.plot)
+```
+Package used to perform cross-validation calls to 'cross-validation-rt.R' script
+```{r results="hide"}
+install.packages("cvTools",repos = "http://cran.rstudio.com/")
+library(cvTools)
+```
+
+###Import prepared data set from the Data Analysis step
+```{r}
+load("C:/CKME136/Forest Fires/fdata.RDa")
+fdata <- fdatatemp
+```
+
+Keep log transformation of area (arealog) as the dependent variable, remove area
+```{r}
+fdata <- fdata[,c(5:17)]
+fdata_rt <- fdata[,c(-9)]
+```
+
+###1. Weather variable combination 
+I tried different number of minbuckets, and the minimum  number of buckets = 8  produced the same results in the
+author's paper
+```{r}
+sel_var <- "temp + RH + rain + wind"
+nofbuckets <- 8 #default value for minbuckets
+cp_value <- 0 # used for pruning
+```
+
+Validate tree using cross validation
+```{r}
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-arealog-rt.R', echo = TRUE)
+```
+#####> RMSE
+#####[1] 64.49935
+#####> MAD
+#####[1] 13.15522
+
+The cross validation results using 8 as the minimum number of observations in a terminal 
+leaf are in line with the paper (RMSE 64.4 and MAD 13.18)
+
+
+Visual representation of the tree using entire dataset:
+```{r}
+rt.w <- (rpart(as.formula(paste("arealog ~", sel_var)), method = "anova", 
+                   data = fdata_rt, control = rpart.control(minbucket = nofbuckets)))
+rpart.plot(rt.w, type =1, digit=3, fallen.leaves = TRUE)
+summary(rt.w)
+```
+Variable importance
+temp 66  wind 18  RH 17 
+       
+```{r}
+printcp(rt.w)
+```
+The CP table above shows that nsplit = 0 is the best model
+This means the average of the entire dataset will always be used for any future predicitons 
+This is not a good prediction 
+
+
+The code below is shown how prunining is doNe in rpart package, however I will not use the prunned tree for any reference
+```{r results="hide"}
+bestcp <- rt.w$cptable[which.min(rt.w$cptable[,"xerror"]),"CP"]
+rt.w.pruned <- prune(rt.w, cp = bestcp)
+rpart.plot(rt.w.pruned, type =1, digit=3, fallen.leaves = TRUE)
+```
+
+###2 decision tree model using all predictors with minbuckets of 29
+```{r}
+sel_var <- "."
+nofbuckets <- 29 # 
+cp_value <- 0
+```
+
+visual representation of the tree
+```{r}
+rt.all <- (rpart(as.formula(paste("arealog ~", sel_var)), method = "anova", 
+                    data = fdata_rt, control = rpart.control(minbucket = nofbuckets)))
+rpart.plot(rt.all, type =1, digit=3, fallen.leaves = TRUE)
+```
+
+Validate the tree using cross validation
+
+```{r}
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-arealog-rt.R', echo = TRUE)
+```
+#####> RMSE
+#####[1] 64.391
+#####> MAD
+#####[1] 13.08937
+
+```{r}
+printcp(rt.all)
+```
+
+## Random Forest
+
+ Random Forest regression package
+```{r}
+install.packages("randomForest",repos = "http://cran.rstudio.com/")
+library(randomForest)
+# Package used to perform cross-validation calls to 'cross-validation-rt.R' script
+install.packages("cvTools",repos = "http://cran.rstudio.com/")
+library(cvTools)
+```
+
+Keep log transformation of area (arealog) as the dependent variable, remove area:
+```{r}
+fdata <- fdatatemp
+fdata <- fdata[,c(5:17)]
+fdata_rf <- fdata[,c(-9)]
+```
+1 - Weather model
+```{r}
+sel_var_rf <- "temp + RH + rain + wind"
+nooftrees <- 100
+```
+
+Execute cross validation
+```{r}
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-arealog-rf.R', echo = TRUE)
+```
+
+100 trees - thsi is in line with the paper (RMSE 64.4 and MAD 12.93)
+
+#####> RMSE
+#####[1] 64.43702
+#####> MAD
+#####[1] 12.93335
+
+
+2 - all predictors
+```{r}
+sel_var_rf <- "."
+nooftrees <- 100
+```
+
+Execute cross validation
+
+```{r}
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-arealog-rf.R', echo = TRUE) 
+```
+
+#####> RMSE
+#####[1] 64.38877
+#####> MAD
+#####[1] 13.16288
+
+
+

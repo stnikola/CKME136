@@ -1,0 +1,98 @@
+---
+title: "LogisticRegression"
+author: "Nikola_Stankovic"
+---
+
+# Logistic Regression
+
+install package used for logistic regression
+```{r}
+install.packages("ROCR",repos = "http://cran.rstudio.com/")
+library(ROCR)
+install.packages("gplots",repos = "http://cran.rstudio.com/") 
+library(gplots)
+```
+```
+Package used to perform cross-validation calls to 'cross-validation-rt.R' script
+```{r results="hide"}
+install.packages("cvTools",repos = "http://cran.rstudio.com/")
+library(cvTools)
+```
+
+Keep actual area as the response, remove log of area
+```{r}
+load("C:/CKME136/Forest Fires/fdata.RDa")
+fdata <- fdatatemp
+fdata <- fdata[,c(5:17)]
+fdata_lr <- fdata[,c(-10)]
+```
+
+create new factor response variable based on area size 
+```{r}
+fdata_lr$classarea <- as.factor(ifelse(fdata_lr$area == 0, 0, 1))
+```
+remove area 
+```{r}
+fdata_lr <- fdata_lr[,c(-9)]
+```
+###1. Stepwise regression to select the best predictors
+```{r}
+full_model <- glm(classarea ~ RH + wind + temp + FFMC + DMC + DC + ISI + season + wday + XY + rain,family = "binomial", data=fdata_lr, maxit=100)
+no_model <- glm(classarea ~ 1, family = "binomial", data=fdata_lr)
+stepwise_model <- step(no_model, list(lower=formula(no_model), upper=formula(full_model)), direction="both", trace = 0)
+summary(stepwise_model)
+```
+selected model predictors are DC and wind only
+
+perform ROC test for the entire dataset 
+```{r}
+p <- predict(stepwise_model)
+pr <- prediction(p, fdata_lr$classarea)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+```
+AUC value of 56% is considered a bad predictor model 
+
+Test the model using 10-fold cross-validation repeated 30 times to get more accurate results
+```{r}
+sel_var_lr <- "DC + wind" 
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lr.R', echo = TRUE)
+```
+AUC value after cross-validation is 56%
+
+###2. All predictors except rain
+```{r}
+sel_var_lr <- "RH + wind + temp + FFMC + DMC + DC + ISI + season + wday + XY" 
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lr.R', echo = TRUE)
+```
+AUC value of 63% - an improvement over the previous model
+
+###3. Model with interactins and poynomials 
+```{r}
+sel_var_lr <- "DMC + poly(temp,3) + poly(wind,3) + poly(rain,3) + poly(DC,3)  +
+                season + XY + DMC:DC + DMC:RH + DMC:season  +  temp:season + RH:season" 
+source('C:/CKME136/Forest Fires/FinalSubmission/cross-validation-lr.R', echo = TRUE)
+```
+AUC value of 69.9% - an improvement over the previous model
+
+Visual representation of ROC for the best model using entire dataset
+```{r}
+lr.best.model <- glm(classarea ~ DMC + poly(temp,3) + poly(wind,3) + poly(rain,3) + poly(DC,3)  +
+                       season + XY + DMC:DC + DMC:RH + DMC:season  +  temp:season + RH:season
+                     ,family = "binomial", data=fdata_lr, maxit=100)
+p <- predict(lr.best.model)
+pr <- prediction(p, fdata_lr$classarea)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf, main = "ROC for the logistic model using predictors: DMC + poly(temp,3) + poly(wind,3) + poly(rain,3) + 
+poly(DC,3)  +  season + XY + DMC:DC + DMC:RH + DMC:season  +  temp:season + RH:season", cex.main = .65 )
+```
+
+
+
+
+
+
+
